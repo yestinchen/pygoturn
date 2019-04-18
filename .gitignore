@@ -1,1 +1,6 @@
 *.pyc
+*.whl
+.env/
+models/
+.vscode/
+result/

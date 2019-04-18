@@ -6,6 +6,7 @@ import re
 import torch
 import numpy as np
 import cv2
+import glob
 
 from model import GoNet
 from helper import NormalizeToTensor, Rescale, crop_sample, bgr2rgb
@@ -22,7 +23,7 @@ parser.add_argument('-d', '--data-directory',
 
 class GOTURN:
     """Tester for OTB formatted sequences"""
-    def __init__(self, root_dir, model_path, device):
+    def __init__(self, root_dir, model_path, device, live=False):
         self.root_dir = root_dir
         self.device = device
         self.transform = NormalizeToTensor()
@@ -36,38 +37,59 @@ class GOTURN:
             model_path, map_location=lambda storage, loc: storage)
         self.model.load_state_dict(checkpoint['state_dict'])
         self.model.to(device)
-        frames = os.listdir(root_dir + '/img')
-        frames = [root_dir + "/img/" + frame for frame in frames]
-        self.len = len(frames)-1
-        frames = np.array(frames)
-        frames.sort()
-        self.x = []
-        f = open(root_dir + '/groundtruth_rect.txt')
-        lines = f.readlines()
-        lines[0] = re.sub('\t', ',', lines[0])
-        lines[0] = re.sub(' +', ',', lines[0])
-        init_bbox = lines[0].strip().split(',')
-        init_bbox = [float(x) for x in init_bbox]
-        init_bbox = [init_bbox[0], init_bbox[1], init_bbox[0]+init_bbox[2],
-                     init_bbox[1] + init_bbox[3]]
-        init_bbox = np.array(init_bbox)
-        self.prev_rect = init_bbox
-        self.img = []
-        for i in range(self.len):
-            self.x.append([frames[i], frames[i+1]])
-            img_prev = cv2.imread(frames[i])
-            img_prev = bgr2rgb(img_prev)
-            img_curr = cv2.imread(frames[i+1])
-            img_curr = bgr2rgb(img_curr)
-            self.img.append([img_prev, img_curr])
-            lines[i+1] = re.sub('\t', ',', lines[i+1])
-            lines[i+1] = re.sub(' +', ',', lines[i+1])
-            bb = lines[i+1].strip().split(',')
-            bb = [float(x) for x in bb]
-            bb = [bb[0], bb[1], bb[0]+bb[2], bb[1]+bb[3]]
-            self.gt.append(bb)
-        self.x = np.array(self.x)
-        print(init_bbox)
+        if live: 
+            # contains only img.
+            frames = glob.glob(os.path.join(root_dir, '*.jpg'))
+            frames = sorted(frames)
+            self.len = len(frames)-1
+            frames = np.array(frames)
+            frames.sort()
+            self.x = []
+            self.img = []
+            for i in range(self.len):
+                self.x.append([frames[i], frames[i+1]])
+                img_prev = cv2.imread(frames[i])
+                # img_prev = bgr2rgb(img_prev)
+                img_curr = cv2.imread(frames[i+1])
+                # img_curr = bgr2rgb(img_curr)
+                self.img.append([img_prev, img_curr])
+            self.x = np.array(self.x)
+        else:
+            frames = os.listdir(root_dir + '/img')
+            frames = [root_dir + "/img/" + frame for frame in frames]
+            self.len = len(frames)-1
+            frames = np.array(frames)
+            frames.sort()
+            self.x = []
+            f = open(root_dir + '/groundtruth_rect.txt')
+            lines = f.readlines()
+            lines[0] = re.sub('\t', ',', lines[0])
+            lines[0] = re.sub(' +', ',', lines[0])
+            init_bbox = lines[0].strip().split(',')
+            init_bbox = [float(x) for x in init_bbox]
+            init_bbox = [init_bbox[0], init_bbox[1], init_bbox[0]+init_bbox[2],
+                        init_bbox[1] + init_bbox[3]]
+            init_bbox = np.array(init_bbox)
+            self.prev_rect = init_bbox
+            self.img = []
+            for i in range(self.len):
+                self.x.append([frames[i], frames[i+1]])
+                img_prev = cv2.imread(frames[i])
+                img_prev = bgr2rgb(img_prev)
+                img_curr = cv2.imread(frames[i+1])
+                img_curr = bgr2rgb(img_curr)
+                self.img.append([img_prev, img_curr])
+                lines[i+1] = re.sub('\t', ',', lines[i+1])
+                lines[i+1] = re.sub(' +', ',', lines[i+1])
+                bb = lines[i+1].strip().split(',')
+                bb = [float(x) for x in bb]
+                bb = [bb[0], bb[1], bb[0]+bb[2], bb[1]+bb[3]]
+                self.gt.append(bb)
+            self.x = np.array(self.x)
+            print(init_bbox)
+
+    def set_init_box(self, initBox):
+        self.prev_rect = np.array(initBox)
 
     def __getitem__(self, idx):
         """
